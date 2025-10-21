@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFramework>net7.0</TargetFramework>
+		<Authors>Emirhan OZKAN</Authors>
+		<Company>Emirhan OZKAN</Company>
+		<PackageId>Envoke</PackageId>
+		<Version>1.0.0</Version>
+		<Description>RESTful API client proxy for .NET microservices with Castle.DynamicProxy integration</Description>
+		<PackageTags>restful;api;client;proxy;microservices;castle;dynamicproxy;interceptor;http;service;.NET</PackageTags>
+		<RepositoryUrl>https://github.com/emirhanozkan/envoke</RepositoryUrl>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<Nullable>disable</Nullable>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.2.0" />
+		<PackageReference Include="Microsoft.AspNetCore.Mvc.Abstractions" Version="2.2.0" />
+		<PackageReference Include="Microsoft.AspNetCore.Mvc.Core" Version="2.2.0" />
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="7.0.0" />
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="7.0.0" />
+		<PackageReference Include="Castle.Core" Version="5.1.1" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+</Project>

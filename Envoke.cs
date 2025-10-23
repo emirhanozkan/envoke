@@ -181,22 +181,25 @@ public class Envoke : IEnvoke
         using (var reader = new StreamReader(httpContext.Request.Body, Encoding.UTF8))
             _.Request.Body = await reader.ReadToEndAsync();
 
-        var jsonElement = JsonSerializer.Deserialize<JsonElement>(_.Request.Body);
+        JsonElement? jsonElement = !string.IsNullOrEmpty(_.Request.Body) ? JsonSerializer.Deserialize<JsonElement>(_.Request.Body) : null;
 
-        var endpoint = httpContext.GetEndpoint();
-        if (endpoint != null)
+        if (jsonElement.HasValue)
         {
-            var actionDescriptor = endpoint.Metadata.GetMetadata<ControllerActionDescriptor>();
-            if (actionDescriptor != null)
+            var endpoint = httpContext.GetEndpoint();
+            if (endpoint != null)
             {
-                var parameters = actionDescriptor.Parameters;
-                foreach (var parameter in parameters)
+                var actionDescriptor = endpoint.Metadata.GetMetadata<ControllerActionDescriptor>();
+                if (actionDescriptor != null)
                 {
-                    var parameterName = parameter.Name;
-                    if (jsonElement.TryGetProperty(parameterName, out var property))
+                    var parameters = actionDescriptor.Parameters;
+                    foreach (var parameter in parameters)
                     {
-                        var parameterType = parameter.ParameterType;
-                        httpContext.Items[parameterName] = property.GetRawText();
+                        var parameterName = parameter.Name;
+                        if (jsonElement.Value.TryGetProperty(parameterName, out var property))
+                        {
+                            var parameterType = parameter.ParameterType;
+                            httpContext.Items[parameterName] = property.GetRawText();
+                        }
                     }
                 }
             }

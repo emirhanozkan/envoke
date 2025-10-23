@@ -9,6 +9,7 @@
 		<PackageTags>restful;api;client;proxy;microservices;castle;dynamicproxy;interceptor;http;service;.NET</PackageTags>
 		<RepositoryUrl>https://github.com/emirhanozkan/envoke</RepositoryUrl>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<Nullable>disable</Nullable>
 	</PropertyGroup>
 
@@ -23,5 +24,9 @@
 
 	<ItemGroup>
 		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Include="README.md" Pack="true" PackagePath="\" />
 	</ItemGroup>
 </Project>

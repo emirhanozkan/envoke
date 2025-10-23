@@ -24,7 +24,7 @@ namespace Envoke
         /// <param name="includeNull">Whether to include null values in the dictionary</param>
         /// <param name="enumToInt">Whether to convert enum values to their integer representation</param>
         /// <returns>A dictionary containing property names as keys and string values</returns>
-        public static Dictionary<string, string> ConvertToDictionary<TSelf>(this TSelf obj, string? pName = null, bool includeNull = false, bool enumToInt = false)
+        public static Dictionary<string, string> ConvertToDictionary<TSelf>(this TSelf obj, string pName = null, bool includeNull = false, bool enumToInt = false)
         {
             var result = new Dictionary<string, string>();
             if (obj == null)
@@ -35,7 +35,7 @@ namespace Envoke
                 return result;
             }
 
-            IEnumerable? enumerable = obj as IEnumerable;
+            IEnumerable enumerable = obj as IEnumerable;
             var not = new TypeCode[] { TypeCode.Empty, TypeCode.Object, TypeCode.DBNull };
             if (!not.Any(x => x == Type.GetTypeCode(obj.GetType())))
             {

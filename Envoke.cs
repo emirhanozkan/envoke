@@ -178,8 +178,14 @@ public class Envoke : IEnvoke
 
         var stopwatch = Stopwatch.StartNew();
 
-        using (var reader = new StreamReader(httpContext.Request.Body, Encoding.UTF8))
+        httpContext.Request.EnableBuffering();
+        
+        using (var reader = new StreamReader(httpContext.Request.Body, Encoding.UTF8, leaveOpen: true))
+        {
             _.Request.Body = await reader.ReadToEndAsync();
+        }
+
+        httpContext.Request.Body.Position = 0;
 
         JsonElement? jsonElement = !string.IsNullOrEmpty(_.Request.Body) ? JsonSerializer.Deserialize<JsonElement>(_.Request.Body) : null;
 

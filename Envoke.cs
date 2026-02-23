@@ -1,13 +1,15 @@
-﻿using Castle.DynamicProxy;
+using Castle.DynamicProxy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.Extensions.Configuration;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -128,18 +130,51 @@ public class Envoke : IEnvoke
 
         if (_.IsSuccessful)
         {
-            if (invocation.Method.ReturnType != typeof(void))
+            var returnType = invocation.Method.ReturnType;
+            var jsonOptions = options?.jsonSerializerOptions ?? new JsonSerializerOptions(JsonSerializerDefaults.Web)
             {
-                var returnValue = JsonSerializer.Deserialize(_.Response.Body, invocation.Method.ReturnType, options?.jsonSerializerOptions ?? new JsonSerializerOptions(JsonSerializerDefaults.Web)
-                {
-                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                });
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            };
+            var body = (_.Response.Body ?? string.Empty).Trim();
+            var hasJsonBody = body.Length > 0 && IsJsonStart(body[0]);
 
-                invocation.ReturnValue = returnValue;
+            if (returnType == typeof(void))
+            {
+                invocation.ReturnValue = returnType.GetDefaultValue();
+            }
+            else if (returnType == typeof(Task))
+            {
+                invocation.ReturnValue = Task.CompletedTask;
+            }
+            else if (returnType.IsGenericType && returnType.GetGenericTypeDefinition() == typeof(Task<>))
+            {
+                var resultType = returnType.GetGenericArguments()[0];
+                object deserialized;
+                if (!hasJsonBody)
+                {
+                    deserialized = TryParsePlainText(_.Response.Body ?? string.Empty, resultType, out var parsed)
+                        ? parsed
+                        : resultType.GetDefaultValue();
+                }
+                else
+                {
+                    deserialized = DeserializeOrThrow(body, resultType, jsonOptions, _.ServiceName, _.MethodName);
+                }
+                var fromResultMethod = typeof(Task).GetMethod(nameof(Task.FromResult), BindingFlags.Public | BindingFlags.Static)!.MakeGenericMethod(resultType);
+                invocation.ReturnValue = fromResultMethod.Invoke(null, new[] { deserialized });
             }
             else
             {
-                invocation.ReturnValue = invocation.Method.ReturnType.GetDefaultValue();
+                if (!hasJsonBody)
+                {
+                    invocation.ReturnValue = TryParsePlainText(_.Response.Body ?? string.Empty, returnType, out var parsed)
+                        ? parsed
+                        : returnType.GetDefaultValue();
+                }
+                else
+                {
+                    invocation.ReturnValue = DeserializeOrThrow(body, returnType, jsonOptions, _.ServiceName, _.MethodName);
+                }
             }
         }
         else
@@ -155,6 +190,68 @@ public class Envoke : IEnvoke
             throw _.ErrorException;
 
         return _;
+    }
+
+    /// <summary>Returns true only when the body clearly starts a JSON object or array. Primitives (e.g. "2", "true") are treated as plain text so string-returning methods get the value as-is.</summary>
+    private static bool IsJsonStart(char c)
+    {
+        return c == '{' || c == '[';
+    }
+
+    /// <summary>Tries to parse plain-text response into a primitive or common type (string, number, bool, Guid, DateTime, etc.). Returns true and sets result on success.</summary>
+    private static bool TryParsePlainText(string value, Type type, out object result)
+    {
+        result = null;
+        var targetType = Nullable.GetUnderlyingType(type) ?? type;
+        var trimmed = value?.Trim() ?? string.Empty;
+        if (trimmed.Length == 0 && targetType != typeof(string))
+            return false;
+
+        if (targetType == typeof(string))
+        {
+            result = value ?? string.Empty;
+            return true;
+        }
+
+        try
+        {
+            if (targetType == typeof(bool))
+            {
+                if (bool.TryParse(trimmed, out var b)) { result = b; return true; }
+                if (trimmed == "1" || trimmed.Equals("yes", System.StringComparison.OrdinalIgnoreCase)) { result = true; return true; }
+                if (trimmed == "0" || trimmed.Equals("no", System.StringComparison.OrdinalIgnoreCase)) { result = false; return true; }
+                return false;
+            }
+            if (targetType == typeof(int) && int.TryParse(trimmed, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var i32)) { result = i32; return true; }
+            if (targetType == typeof(long) && long.TryParse(trimmed, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var i64)) { result = i64; return true; }
+            if (targetType == typeof(short) && short.TryParse(trimmed, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var i16)) { result = i16; return true; }
+            if (targetType == typeof(byte) && byte.TryParse(trimmed, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var u8)) { result = u8; return true; }
+            if (targetType == typeof(double) && double.TryParse(trimmed, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var d)) { result = d; return true; }
+            if (targetType == typeof(float) && float.TryParse(trimmed, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var f)) { result = f; return true; }
+            if (targetType == typeof(decimal) && decimal.TryParse(trimmed, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var m)) { result = m; return true; }
+            if (targetType == typeof(Guid) && Guid.TryParse(trimmed, out var g)) { result = g; return true; }
+            if (targetType == typeof(DateTime) && DateTime.TryParse(trimmed, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var dt)) { result = dt; return true; }
+            if (targetType == typeof(DateTimeOffset) && DateTimeOffset.TryParse(trimmed, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var dto)) { result = dto; return true; }
+            if (targetType == typeof(TimeSpan) && TimeSpan.TryParse(trimmed, System.Globalization.CultureInfo.InvariantCulture, out var ts)) { result = ts; return true; }
+        }
+        catch { return false; }
+
+        return false;
+    }
+
+    private static object DeserializeOrThrow(string json, Type type, JsonSerializerOptions options, string serviceName, string methodName)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize(json, type, options);
+        }
+        catch (JsonException ex)
+        {
+            var snippet = json.Length > 200 ? json.AsSpan(0, 200).ToString() + "..." : json;
+            throw new EnvokeException(
+                $"Failed to deserialize response from {serviceName}.{methodName}: {ex.Message}. Response snippet: {snippet}",
+                ex);
+        }
     }
 
     /// <summary>

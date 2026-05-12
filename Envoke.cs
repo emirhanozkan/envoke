@@ -146,6 +146,29 @@ public class Envoke : IEnvoke
             {
                 invocation.ReturnValue = Task.CompletedTask;
             }
+            else if (returnType.IsGenericType && returnType.GetGenericTypeDefinition() == typeof(Task<>)
+                && returnType.GetGenericArguments()[0] == typeof(byte[])
+                || returnType == typeof(byte[]))
+            {
+                byte[] responseBytes;
+                try
+                {
+                    responseBytes = JsonSerializer.Deserialize<byte[]>(body) ?? Array.Empty<byte>();
+                }
+                catch
+                {
+                    responseBytes = Array.Empty<byte>();
+                }
+
+                if (options?.LogByteArrayResponseBody != true)
+                {
+                    _.Response.Body = null;
+                }
+
+                invocation.ReturnValue = returnType == typeof(byte[])
+                    ? responseBytes
+                    : Task.FromResult(responseBytes);
+            }
             else if (returnType.IsGenericType && returnType.GetGenericTypeDefinition() == typeof(Task<>))
             {
                 var resultType = returnType.GetGenericArguments()[0];
@@ -276,7 +299,7 @@ public class Envoke : IEnvoke
         var stopwatch = Stopwatch.StartNew();
 
         httpContext.Request.EnableBuffering();
-        
+
         using (var reader = new StreamReader(httpContext.Request.Body, Encoding.UTF8, leaveOpen: true))
         {
             _.Request.Body = await reader.ReadToEndAsync();

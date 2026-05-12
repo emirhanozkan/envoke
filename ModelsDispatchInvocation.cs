@@ -45,6 +45,12 @@ namespace Envoke
         /// Default: true. When false, errors are captured in the DispatchInvocation.ErrorException property.
         /// </summary>
         public bool ThrowExceptionOnError { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets whether byte[] responses should be written into DispatchInvocation.Response.Body as Base64 for logging.
+        /// Default: false.
+        /// </summary>
+        public bool LogByteArrayResponseBody { get; set; } = false;
     }
 
     /// <summary>

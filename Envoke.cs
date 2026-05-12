@@ -172,32 +172,13 @@ public class Envoke : IEnvoke
             else if (returnType.IsGenericType && returnType.GetGenericTypeDefinition() == typeof(Task<>))
             {
                 var resultType = returnType.GetGenericArguments()[0];
-                object deserialized;
-                if (!hasJsonBody)
-                {
-                    deserialized = TryParsePlainText(_.Response.Body ?? string.Empty, resultType, out var parsed)
-                        ? parsed
-                        : resultType.GetDefaultValue();
-                }
-                else
-                {
-                    deserialized = DeserializeOrThrow(body, resultType, jsonOptions, _.ServiceName, _.MethodName);
-                }
+                var deserialized = DeserializeWithFallback(body, resultType, jsonOptions, _.ServiceName, _.MethodName);
                 var fromResultMethod = typeof(Task).GetMethod(nameof(Task.FromResult), BindingFlags.Public | BindingFlags.Static)!.MakeGenericMethod(resultType);
                 invocation.ReturnValue = fromResultMethod.Invoke(null, new[] { deserialized });
             }
             else
             {
-                if (!hasJsonBody)
-                {
-                    invocation.ReturnValue = TryParsePlainText(_.Response.Body ?? string.Empty, returnType, out var parsed)
-                        ? parsed
-                        : returnType.GetDefaultValue();
-                }
-                else
-                {
-                    invocation.ReturnValue = DeserializeOrThrow(body, returnType, jsonOptions, _.ServiceName, _.MethodName);
-                }
+                invocation.ReturnValue = DeserializeWithFallback(body, returnType, jsonOptions, _.ServiceName, _.MethodName);
             }
         }
         else
@@ -260,6 +241,23 @@ public class Envoke : IEnvoke
         catch { return false; }
 
         return false;
+    }
+
+    private static object DeserializeWithFallback(string body, Type type, JsonSerializerOptions options, string serviceName, string methodName)
+    {
+        if (string.IsNullOrEmpty(body))
+            return type.GetDefaultValue();
+
+        try
+        {
+            return JsonSerializer.Deserialize(body, type, options);
+        }
+        catch
+        {
+            return TryParsePlainText(body, type, out var parsed)
+                ? parsed
+                : type.GetDefaultValue();
+        }
     }
 
     private static object DeserializeOrThrow(string json, Type type, JsonSerializerOptions options, string serviceName, string methodName)
